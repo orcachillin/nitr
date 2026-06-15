@@ -1,8 +1,17 @@
 
-import { defineConfig } from "@mikro-orm/core";
+import { defineConfig, GeneratedCacheAdapter } from "@mikro-orm/core";
 import { PostgreSqlDriver } from "@mikro-orm/postgresql";
-import { TsMorphMetadataProvider } from "@mikro-orm/reflection";
 import { EntityManager } from "@mikro-orm/sql";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const DEVELOPMENT = process.env.NODE_ENV === "development" || !process.argv.includes("--prod")
+const metadataPath = resolve("./temp/metadata.json")
+const metadataExists = existsSync(metadataPath)
+const data = metadataExists && JSON.parse(readFileSync(metadataPath, "utf-8"))
+
+const metadataProvider = DEVELOPMENT || !metadataExists ? (await import("@mikro-orm/reflection")).TsMorphMetadataProvider : undefined
+
 
 export const DatabaseConfig: Parameters<typeof defineConfig<PostgreSqlDriver, EntityManager<PostgreSqlDriver>, string[]>>[0] = {
 
@@ -18,7 +27,14 @@ export const DatabaseConfig: Parameters<typeof defineConfig<PostgreSqlDriver, En
         path: 'src/database/migrations',
     },
     driver: PostgreSqlDriver,
-    metadataProvider: TsMorphMetadataProvider,
+    metadataProvider,
+    metadataCache: {
+        enabled: true,
+        ...DEVELOPMENT ? undefined : {
+            adapter: GeneratedCacheAdapter,
+            options: { data }
+        },
+    },
     preferTs: true,
     verbose: true,
     user: process.env.DB_USER || "postgres",
